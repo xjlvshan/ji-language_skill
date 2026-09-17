@@ -1,0 +1,17 @@
+程序类型=2
+模块文件=CMD.inc
+引入 "lib\kernel32.lib";
+导入 开机毫秒 支持库 "KERNEL32.DLL",0;
+导入 模块名称 支持库 "KERNEL32.DLL",3;
+文本 路径[260];
+程序 初始启动
+写文字("DLL-BEGIN");
+写字符(10);
+整数 计数=开机毫秒;
+写格式("A GetTickCount=%d\r\n",计数);
+整数 长=模块名称(0,路径,260);
+写格式("B GetModuleFileNameA=%d\r\n",长);
+写文字(路径);
+写字符(10);
+写文字("DLL-END");
+结束

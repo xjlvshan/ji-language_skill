@@ -1,0 +1,19 @@
+# 编译产物（由 Sc.exe 生成，不入库）
+*.com
+*.exe
+*.dll
+*.bin
+*.obj
+
+# 临时/验证目录
+tmp/
+tmp-*/
+test/
+.shots-tmp/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
