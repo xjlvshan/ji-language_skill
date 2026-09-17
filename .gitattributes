@@ -1,0 +1,11 @@
+# 极语言源码必须是 GBK + CRLF，禁止 git 做任何换行/编码转换
+*.txt -text
+*.sec -text
+*.SEC -text
+*.ji -text
+*.inc -text
+
+# 文档与脚本按文本处理
+*.md text
+*.ps1 text eol=crlf
+*.gitignore text
