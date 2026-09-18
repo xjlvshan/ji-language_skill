@@ -1,0 +1,108 @@
+程序类型=2
+模块文件=CMD.inc
+定义 位数=64;
+// 20-ai-onnx-run.txt —— 极语言(64位) 调 onnxruntime.dll 跑完整推理（实测通过）
+// 输出: Y raw hex = 40000000 40400000 40800000 40A00000 40C00000 40E00000 (= 2,3,4,5,6,7)
+// 依赖: onnxruntime.dll(x64, 1.23.2 -> OrtApi v23) 与同目录 add1.onnx（见 references/11）
+// 运行: powershell -File scripts\sec.ps1 -Src examples\20-ai-onnx-run.txt -Run
+引入 "lib\kernel32.lib";
+导入 载库 别名 LoadLibraryA 支持库 "KERNEL32.DLL",1;
+导入 取址 别名 GetProcAddress 支持库 "KERNEL32.DLL",2;
+导入 冲刷 别名 fflush 支持库 "MSVCRT.DLL",1;
+程序 初始启动
+文本 缓冲[256];
+文本 路径[260];
+文本 名[64];
+
+// ===== 1. 动态载入 onnxruntime.dll（x64） =====
+复制文字(路径,"C:\Users\lvshan\AppData\Roaming\Python\Python312\site-packages\onnxruntime\capi\onnxruntime.dll");
+大数 库=载库(路径);
+写格式("1) LoadLibraryA  onnxruntime.dll -> %p\r\n",库);
+
+// ===== 2. OrtGetApiBase -> OrtApiBase->GetApi(23) -> OrtApi 函数表 =====
+复制文字(名,"OrtGetApiBase");
+大数 取基=取址(库,名);
+大数 基=调用 取基();
+大数 取接口=基(0)$;
+大数 接口=调用 取接口(23);
+写格式("2) OrtApiBase=%p  OrtApi(v23)=%p\r\n",基,接口);
+
+// ===== 3. OrtApi::CreateEnv(ORT_LOGGING_LEVEL_WARNING, "probe", &env)   偏移24 =====
+大数 建环境=接口(24)$;
+大数 环境=0;
+大数 状态=调用 建环境(2,"probe",@环境);
+写格式("3) CreateEnv            status=%p env=%p\r\n",状态,环境);
+
+// ===== 4. OrtApi::CreateSessionOptions(&opt)                            偏移80 =====
+大数 建选项=接口(80)$;
+大数 选项=0;
+调用 建选项(@选项);
+写格式("4) CreateSessionOptions opt=%p\r\n",选项);
+
+// ===== 5. 读入 onnx 模型文件字节 =====
+整数 文件=开文件("add1.onnx",0);
+整数 高位=0;
+大数 长度=文件大小(文件,@高位);
+大数 模型=申请内存(长度+1);
+整数 已读=读文件(文件,模型,长度);
+关文件(文件);
+写格式("5) read add1.onnx      %d bytes -> %p\r\n",已读,模型);
+
+// ===== 6. OrtApi::CreateSessionFromArray(env,data,len,opt,&session)      偏移64 =====
+大数 建会话=接口(64)$;
+大数 会话=0;
+状态=调用 建会话(环境,模型,长度,选项,@会话);
+写格式("6) CreateSessionFromArray status=%p session=%p\r\n",状态,会话);
+
+// ===== 7. OrtApi::GetAllocatorWithDefaultOptions(&alloc)                 偏移624 ====
+大数 取分配=接口(624)$;
+大数 分配=0;
+调用 取分配(@分配);
+写格式("7) default allocator    %p\r\n",分配);
+
+// ===== 8. OrtApi::CreateTensorAsOrtValue(alloc,shape{2,3},2,FLOAT,&t)    偏移384 ====
+大数 形状=申请内存(16);
+形状(0)$=2;
+形状(8)$=3;
+大数 建张量=接口(384)$;
+大数 输入=0;
+状态=调用 建张量(分配,形状,2,1,@输入);
+写格式("8) CreateTensor         status=%p tensor=%p\r\n",状态,输入);
+
+// ===== 9. OrtApi::GetTensorMutableData(tensor,&data) 再写入 1.0~6.0       偏移408 ====
+大数 取数据=接口(408)$;
+大数 数据=0;
+状态=调用 取数据(输入,@数据);
+数据(0)!=1.0;
+数据(4)!=2.0;
+数据(8)!=3.0;
+数据(12)!=4.0;
+数据(16)!=5.0;
+数据(20)!=6.0;
+写格式("9) input X float[2,3]  = 1,2,3,4,5,6 (data=%p)\r\n",数据);
+
+// ===== 10. OrtApi::Run(session,0,in_names,in_vals,1,out_names,1,out_vals) 偏移72 =====
+大数 入名=申请内存(8);
+大数 入值=申请内存(8);
+大数 出名=申请内存(8);
+大数 出值=申请内存(8);
+入名(0)$="X";
+出名(0)$="Y";
+入值(0)$=输入;
+出值(0)$=0;
+大数 运行=接口(72)$;
+状态=调用 运行(会话,0,入名,入值,1,出名,1,出值);
+写格式("10) Run                 status=%p output_value=%p\r\n",状态,出值(0)$);
+
+// ===== 11. 读回输出张量：期望 2,3,4,5,6,7 =====
+大数 出数据=0;
+状态=调用 取数据(出值(0)$,@出数据);
+写格式("11) output Y raw hex   = %08X %08X %08X %08X %08X %08X\r\n",
+出数据(0)&,出数据(4)&,出数据(8)&,出数据(12)&,出数据(16)&,出数据(20)&);
+格式化(缓冲,"    output Y float     = %.1f %.1f %.1f %.1f %.1f %.1f",
+出数据(0)!,出数据(4)!,出数据(8)!,出数据(12)!,出数据(16)!,出数据(20)!);
+写文字(缓冲);写字符(13);写字符(10);
+写文字("OK: 极语言 完成了一次 ONNX Runtime 推理 (Y = X + 1)");写字符(13);写字符(10);
+冲刷(0);
+退出(0);
+结束

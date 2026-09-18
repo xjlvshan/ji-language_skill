@@ -1,0 +1,114 @@
+程序类型=2
+模块文件=CMD.inc
+定义 位数=64;
+// 22-ai-gguf-llama.txt —— 极语言(64位) 用 llama.cpp 的 llama.dll 载入 GGUF 量化模型（实测通过）
+// 前提: 把 llama.dll 同目录的 ggml*.dll 放到一个目录，并把路径写进下面的 目录 变量
+// 证据: llama.cpp 自己输出 "loaded meta data with 35 key-value pairs and 320 tensors ... GGUF V3"
+// 运行: powershell -File scripts\sec.ps1 -Src examples\22-ai-gguf-llama.txt   (500MB 级模型载入较慢)
+引入 "lib\kernel32.lib";
+导入 载库 别名 LoadLibraryA 支持库 "KERNEL32.DLL",1;
+导入 取址 别名 GetProcAddress 支持库 "KERNEL32.DLL",2;
+导入 设目录 别名 SetDllDirectoryA 支持库 "KERNEL32.DLL",1;
+导入 冲刷 别名 fflush 支持库 "MSVCRT.DLL",1;
+程序 初始启动
+文本 缓冲[256];
+文本 库名[64];
+文本 路径[260];
+文本 目录[260];
+复制文字(目录,"D:\SEC\project\ji-ai\llama");
+整数 目录设置=设目录(目录);
+
+// ===== 1. 载入 llama.cpp 的 llama.dll（同目录下已放好 ggml*.dll 依赖） =====
+复制文字(库名,"D:\SEC\project\ji-ai\llama\llama.dll");
+大数 库=载库(库名);
+写格式("1) LoadLibraryA llama.dll -> %p\r\n",库);
+冲刷(0);
+如果(库=0)
+{
+	写文字("   载入 llama.dll 失败");写字符(13);写字符(10);
+	冲刷(0);
+	退出(2);
+}
+
+// ===== 2. 取入口地址 =====
+复制文字(库名,"llama_backend_init");
+大数 后端初始化=取址(库,库名);
+复制文字(库名,"llama_model_load_from_file");
+大数 载模型=取址(库,库名);
+复制文字(库名,"llama_model_desc");
+大数 取描述=取址(库,库名);
+复制文字(库名,"llama_model_n_params");
+大数 取参数数=取址(库,库名);
+复制文字(库名,"llama_model_default_params");
+大数 取默认参数=取址(库,库名);
+复制文字(库名,"llama_model_size");
+大数 取体积=取址(库,库名);
+复制文字(库名,"llama_n_ctx_train");
+大数 取训练上下文=取址(库,库名);
+复制文字(库名,"llama_model_get_vocab");
+大数 取词表=取址(库,库名);
+复制文字(库名,"llama_tokenize");
+大数 分词=取址(库,库名);
+写格式("2) load=%p desc=%p tokenize=%p\r\n",载模型,取描述,分词);
+冲刷(0);
+
+// ===== 3. llama_backend_init() =====
+调用 后端初始化();
+写文字("3) llama_backend_init() done");写字符(13);写字符(10);
+冲刷(0);
+
+// ===== 3.5 载入 ggml 后端（新版 llama.cpp 必须先加载后端才能建模型） =====
+复制文字(库名,"ggml.dll");
+大数 后端库=载库(库名);
+写格式("3.5) LoadLibraryA ggml.dll -> %p\r\n",后端库);
+复制文字(库名,"ggml_backend_load_all_from_path");
+大数 载后端=取址(后端库,库名);
+调用 载后端(目录);
+写文字("     ggml_backend_load_all_from_path() done");写字符(13);写字符(10);
+冲刷(0);
+// ===== 4. llama_model_params 全填 0（CPU / 不使用 mmap），
+//           x64 下「按值传递的大结构体」实际用隐藏指针传递，所以传参数表地址即可 =====
+大数 参数表=申请内存(512);
+调用 取默认参数(参数表);
+复制文字(路径,"D:\workplace\Police-analysis\models\Qwen3.5-0.8B.Q4_K_M.gguf");
+写文字("4) 正在载入 Q4_K_M GGUF ...");写字符(13);写字符(10);
+冲刷(0);
+大数 模型=调用 载模型(路径,参数表);
+写格式("   llama_model_load_from_file -> %p\r\n",模型);
+冲刷(0);
+如果(模型=0)
+{
+	写文字("   载入失败");写字符(13);写字符(10);
+	冲刷(0);
+	退出(3);
+}
+
+// ===== 5. 模型信息（描述串里带量化类型） =====
+大数 描述指针=调用 取描述(模型);
+写文字("5) llama_model_desc    = ");写文字(描述指针);写字符(13);写字符(10);
+大数 参数总数=调用 取参数数(模型);
+写格式("   llama_model_n_params = %p (hex)",参数总数);写字符(13);写字符(10);
+大数 模型字节=调用 取体积(模型);
+写格式("   llama_model_size     = %p bytes (hex)",模型字节);写字符(13);写字符(10);
+整数 训练上下文=调用 取训练上下文(模型);
+写格式("   llama_n_ctx_train    = %d\r\n",训练上下文);
+冲刷(0);
+
+// ===== 6. 分词验证 =====
+大数 词表=调用 取词表(模型);
+大数 词元=申请内存(256);
+文本 句子[64];
+复制文字(句子,"Hello 极语言");
+整数 词元数=调用 分词(词表,句子,文字长度(句子),词元,64,1,0);
+写格式("6) llama_tokenize -> %d tokens:",词元数);
+整数 i=0;
+循环于(i=0;i<词元数;i++)
+{
+	整数 t=词元(i*4)&;
+	写格式(" %d",t);
+}
+写字符(13);写字符(10);
+写文字("OK: 极语言 通过 llama.cpp 成功载入 GGUF 量化模型");写字符(13);写字符(10);
+冲刷(0);
+退出(0);
+结束
