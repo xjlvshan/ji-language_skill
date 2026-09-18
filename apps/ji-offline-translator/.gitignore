@@ -1,0 +1,14 @@
+# 本目录是 D:\SEC\project\ji-offline-translator 的源码快照。
+# 运行时依赖（2.3 GB 模型 / Python 引擎）与编译产物不入库。
+
+# 引擎：目录联接指向原 aardio 工程的 dist\engine（模型 + python）
+engine/
+
+# 构建中间产物
+src/_build/
+
+# 运行期产物
+bridge_port.txt
+bridge_req.log
+ocr_capture.bmp
+__pycache__/

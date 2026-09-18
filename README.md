@@ -25,8 +25,12 @@ ji-language/
 │   ├── shot.ps1           按窗口标题/进程截图（PNG）
 │   ├── sysshot.ps1        按 PID 截控制台窗口
 │   ├── winprobe.ps1       枚举子窗口 / BM_CLICK / WM_SETTEXT / 读窗口标题（GUI 调试）
+│   ├── build-check.ps1    编译产物加载校验（识别"BUILD_OK 但 CreateProcess 报 193"的坏镜像）
 │   └── utf8-to-gbk.ps1    UTF-8 源码 → GBK + CRLF
-└── examples/         # 46 个示例源码（全部 BUILD_OK）+ 6 张截图 + 索引
+├── examples/         # 示例源码（全部 BUILD_OK）+ 截图 + 索引
+└── apps/             # 实战应用（完整工程）
+    └── ji-offline-translator/   极语言复现的「离线翻译助手」：GUI + Winsock + 定时器防抖
+                                  + 全屏框选截图识别 + 整套主题换色（源码 / 工具 / 截图）
 ```
 
 ## 快速使用
@@ -81,6 +85,22 @@ powershell -File scripts/sec.ps1 -Src examples/01-core-cheatsheet.txt -Run
 - 本版**不可用**：结构体数组、二维数组、`重置/保留/销毁/循环数组`（普通数组）、`大数` 64 位运算、子类带参/带返回值方法、动态调用 `加载库/函数地址/调用`。
 
 完整 40+ 条见 `SKILL.md` 的陷阱表。
+
+## 实战应用：`apps/ji-offline-translator`
+
+用一个**完整工程**验证本技能的结论：极语言复现 aardio 版「离线翻译助手」
+（CTranslate2 + PaddleOCR + Qwen2-0.5B + SQLite 引擎原样复用，前端全部由极语言写）。
+
+| 看点 | 说明 |
+|---|---|
+| 输入即译 600ms 防抖 | `EN_CHANGE → 设置定时(窗体,101,600,0)` + `为 定时事件` 分支。**这是本技能最重要的修正**：`设置定时` 第 4 参数传 `@过程` 会因 TIMERPROC 蹦床调用约定不匹配，几次回调后必 `0xC0000409`（`src/_lab/tm5.txt` 崩 / `tm4.txt` 稳） |
+| 截图识别 | 自建 `WS_EX_LAYERED\|TOPMOST` 全屏框选窗 + 鼠标框选（坐标在 `数据`/lParam）+ GDI `位图传输` 抓屏 + 逐行 `GetDIBits` 手写 24bpp BMP + 引擎 OCR |
+| 整套主题换色 | `擦除背景` + `绘制静态/绘制编辑/绘制列表` + `LVM_SETBKCOLOR/SETTEXTCOLOR/SETTEXTBKCOLOR`，棕/深蓝/多彩三套 |
+| 自动化回归 | `tools/` 里 5 个脚本：构建、键入/截图、主题校验（读回 LVM 颜色）、截图识别端到端（造目标窗口 + 真实鼠标消息）、桥协议直连测试 |
+
+> 仓库内**不含编译产物**（本仓库 `.gitignore` 全局排除 `*.exe`）与 `engine/`（2.3 GB 模型目录联接）。
+> 要跑起来：把 `apps/ji-offline-translator/` 复制到纯 ASCII 路径，按该目录 `README.md` §10 重建
+> `engine` 联接，再 `powershell -File tools/build.ps1` 编译。
 
 ## 环境要求
 
