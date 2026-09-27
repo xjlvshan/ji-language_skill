@@ -17,3 +17,5 @@ test/
 *.swp
 Thumbs.db
 desktop.ini
+*.aa.bak.*
+*.aa.rbk.*
